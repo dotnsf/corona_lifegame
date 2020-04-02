@@ -1,0 +1,322 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3c.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml">
+<head>
+<meta charset="utf8"/>
+<meta http-equiv="pragma" content="no-cache"/>
+<script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+<link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet"/>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+<meta name="apple-mobile-web-app-title" content="Corona Lifegame"/>
+
+<title>Corona Lifegame</title>
+<script>
+var MARGIN = 3;
+var ROWS = 40 + MARGIN * 2;
+var COLS = 40 + MARGIN * 2;
+
+var cells = [];   //. 0:空, 1:陰性な人, 2:陽性な人, 3:重症化した人
+var timer_id = -1;
+
+$(function(){
+  loadSample( 0 );
+
+  $('#sample').change( function(){
+    var v = $('#sample').val();
+    v = parseInt( v );
+    loadSample( v );
+  });
+});
+
+function initBoard(){
+  //. init board
+  $('#tbl_field').html( '' );
+  cells = [];
+  for( var r = 0; r < ROWS; r ++ ){
+    var tr = '<tr>'
+    for( var c = 0; c < COLS; c ++ ){
+      var idx = r * COLS + c;
+      tr += '<td class="cell" id="cell_' + idx + '"></td>';
+      cells.push( 0 );
+    }
+    tr += '</tr>';
+    $('#tbl_field').append( tr );
+  }
+
+  $('.cell').click( function(){
+    var cell_id = $(this).attr( 'id' );
+    var id = cell_id.split('_')[1];
+    var cls = $('#'+cell_id).attr( 'class' ).split( ' ' );
+    var cell_class = ( cls.length > 1 ? cls[1] : '' );
+    switch( cell_class ){
+    case '':
+      $('#'+cell_id).addClass( 'cell_1' );
+      cells[id] = 1;
+      break;
+    case 'cell_1':
+      $('#'+cell_id).removeClass( cell_class );
+      $('#'+cell_id).addClass( 'cell_2' );
+      cells[id] = 2;
+      break;
+    case 'cell_2':
+      $('#'+cell_id).removeClass( cell_class );
+      $('#'+cell_id).addClass( 'cell_3' );
+      cells[id] = 3;
+      break;
+    case 'cell_3':
+      $('#'+cell_id).removeClass( cell_class );
+      cells[id] = 0;
+      break;
+    }
+  });
+
+  $('#simulate_btn').html( 'シミュレート' );
+  $('#days').html( 0 );
+}
+
+function loadSample( idx ){
+  initBoard();
+  switch( idx ){
+  case 0:  //. 密集
+    for( var r = 0; r < ROWS; r ++ ){
+      if( MARGIN <= r && r < 40 + MARGIN ){
+        for( var c = 0; c < COLS; c ++ ){
+          if( MARGIN <= c && c < 40 + MARGIN ){
+            var idx = r * COLS + c;
+            cells[idx] = 1;
+            $('#cell_'+idx).addClass( 'cell_1' );
+          }
+        }
+      }
+    }
+
+    //. 中心に感染者
+    var i_r = Math.floor( ROWS / 2 );
+    var i_c = Math.floor( COLS / 2 );
+    var i_idx = i_r * COLS + i_c;
+    cells[i_idx] = 2;
+    $('#cell_'+i_idx).addClass( 'cell_2' );
+    break;
+  case 1:  //. 少し空間
+    for( var r = 0; r < ROWS; r ++ ){
+      if( MARGIN <= r && r < 40 + MARGIN && r % 2 == 0 ){
+        for( var c = 0; c < COLS; c ++ ){
+          if( MARGIN <= c && c < 40 + MARGIN && c % 2 == 0 ){
+            var idx = r * COLS + c;
+            cells[idx] = 1;
+            $('#cell_'+idx).addClass( 'cell_1' );
+          }
+        }
+      }
+    }
+
+    //. 中心に感染者
+    var i_r = Math.floor( ROWS / 2 ); i_r -= ( i_r % 2 );
+    var i_c = Math.floor( COLS / 2 ); i_c -= ( i_c % 2 );
+    var i_idx = i_r * COLS + i_c;
+    cells[i_idx] = 2;
+    $('#cell_'+i_idx).addClass( 'cell_2' );
+    break;
+  case 2:  //. 余裕
+    for( var r = 0; r < ROWS; r ++ ){
+      if( MARGIN <= r && r < 40 + MARGIN && r % 3 == 0 ){
+        for( var c = 0; c < COLS; c ++ ){
+          if( MARGIN <= c && c < 40 + MARGIN && c % 3 == 0 ){
+            var idx = r * COLS + c;
+            cells[idx] = 1;
+            $('#cell_'+idx).addClass( 'cell_1' );
+          }
+        }
+      }
+    }
+
+    //. 中心に感染者
+    var i_r = Math.floor( ROWS / 2 ); i_r -= ( i_r % 3 );
+    var i_c = Math.floor( COLS / 2 ); i_c -= ( i_c % 3 );
+    var i_idx = i_r * COLS + i_c;
+    cells[i_idx] = 2;
+    $('#cell_'+i_idx).addClass( 'cell_2' );
+    break;
+  }
+}
+
+function simulate(){
+  var btn_text = $('#simulate_btn').text();
+  if( btn_text == 'シミュレート' ){
+    $('#simulate_btn').html( 'リセット' );
+
+    $('#days').html( '0' );
+    $('#ratio1').attr( 'readonly', true );
+    $('#ratio2').attr( 'readonly', true );
+    $('#ratio3').attr( 'readonly', true );
+    $('#ratio4').attr( 'readonly', true );
+    $('#ratio5').attr( 'readonly', true );
+    var ratio1 = parseFloat( $('#ratio1').val() );
+    var ratio2 = parseFloat( $('#ratio2').val() );
+    var ratio3 = parseFloat( $('#ratio3').val() );
+    var ratio4 = parseFloat( $('#ratio4').val() );
+    var ratio5 = parseInt( $('#ratio5').val() );
+
+    timer_id = setInterval( function(){
+      nextDay( ratio1, ratio2, ratio3, ratio4 );
+    }, ratio5 );
+  }else{
+    $('#simulate_btn').html( 'シミュレート' );
+    //$('#days').html( '0' );
+    $('#ratio1').attr( 'readonly', false );
+    $('#ratio2').attr( 'readonly', false );
+    $('#ratio3').attr( 'readonly', false );
+    $('#ratio4').attr( 'readonly', false );
+    $('#ratio5').attr( 'readonly', false );
+
+    if( timer_id ){
+      clearInterval( timer_id );
+      timer_id = -1;
+    }
+  }
+}
+
+function nextDay( ratio1, ratio2, ratio3, ratio4 ){
+  var day = parseInt( $('#days').text() );
+  day ++;
+  $('#days').html( day );
+
+  //var c_cells = JSON.parse( JSON.stringify( cells ) );
+
+  //. ボードを１日後の状態にする
+  for( var r = 0; r < ROWS; r ++ ){
+    if( MARGIN <= r && r < 40 + MARGIN ){
+      for( var c = 0; c < COLS; c ++ ){
+        if( MARGIN <= c && c < 40 + MARGIN ){
+          var idx = r * COLS + c;
+          if( cells[idx] > 1 ){
+            //. 隣
+            if( cells[idx-COLS-1] == 1 && Math.random() < ratio1 ){ infect( idx-COLS-1, ratio4 ); } //. 左上
+            if( cells[idx-COLS] == 1 && Math.random() < ratio1 ){ infect( idx-COLS, ratio4 ); }     //. 上
+            if( cells[idx-COLS+1] == 1 && Math.random() < ratio1 ){ infect( idx-COLS+1, ratio4 ); } //. 右上
+            if( cells[idx-1] == 1 && Math.random() < ratio1 ){ infect( idx-1, ratio4 ); }           //. 左
+            if( cells[idx+1] == 1 && Math.random() < ratio1 ){ infect( idx+1, ratio4 ); }           //. 右
+            if( cells[idx+COLS] == 1 && Math.random() < ratio1 ){ infect( idx+COLS-1, ratio4 ); }   //. 左下
+            if( cells[idx+COLS] == 1 && Math.random() < ratio1 ){ infect( idx+COLS, ratio4 ); }     //. 下
+            if( cells[idx+COLS+1] == 1 && Math.random() < ratio1 ){ infect( idx+COLS+1, ratio4 ); } //. 右下
+
+            //. ２つ隣
+            if( cells[idx-2*COLS-2] == 1 && Math.random() < ratio2 ){ infect( idx-2*COLS-2, ratio4 ); } //. 左上
+            if( cells[idx-2*COLS] == 1 && Math.random() < ratio2 ){ infect( idx-2*COLS, ratio4 ); }     //. 上
+            if( cells[idx-2*COLS+2] == 1 && Math.random() < ratio2 ){ infect( idx-2*COLS+2, ratio4 ); } //. 右上
+            if( cells[idx-2] == 1 && Math.random() < ratio2 ){ infect( idx-2, ratio4 ); }               //. 左
+            if( cells[idx+2] == 1 && Math.random() < ratio2 ){ infect( idx+2, ratio4 ); }               //. 右
+            if( cells[idx+2*COLS-2] == 1 && Math.random() < ratio2 ){ infect( idx+2*COLS-2, ratio4 ); } //. 左下
+            if( cells[idx+2*COLS] == 1 && Math.random() < ratio2 ){ infect( idx+2*COLS, ratio4 ); }     //. 下
+            if( cells[idx+2*COLS+2] == 1 && Math.random() < ratio2 ){ infect( idx+2*COLS+2, ratio4 ); } //. 右下
+
+            //. ３つ隣
+            if( cells[idx-3*COLS-3] == 1 && Math.random() < ratio3 ){ infect( idx-3*COLS-3, ratio4 ); } //. 左上
+            if( cells[idx-3*COLS] == 1 && Math.random() < ratio3 ){ infect( idx-3*COLS, ratio4 ); }     //. 上
+            if( cells[idx-3*COLS+3] == 1 && Math.random() < ratio3 ){ infect( idx-3*COLS+3, ratio4 ); } //. 右上
+            if( cells[idx-3] == 1 && Math.random() < ratio3 ){ infect( idx-3, ratio4 ); }               //. 左
+            if( cells[idx+3] == 1 && Math.random() < ratio3 ){ infect( idx+3, ratio4 ); }               //. 右
+            if( cells[idx+3*COLS-3] == 1 && Math.random() < ratio3 ){ infect( idx+3*COLS-3, ratio4 ); } //. 左下
+            if( cells[idx+3*COLS] == 1 && Math.random() < ratio3 ){ infect( idx+3*COLS, ratio4 ); }     //. 下
+            if( cells[idx+3*COLS+3] == 1 && Math.random() < ratio3 ){ infect( idx+3*COLS+3, ratio4 ); } //. 右下
+          }
+        }
+      }
+    }
+  }
+}
+
+function infect( idx, ratio ){
+  if( Math.random() < ratio ){
+    //. 時間要素を考慮する必要は？
+    cells[idx] = 3;
+    $('#cell_'+idx).addClass( 'cell_3' );
+  }else{
+    cells[idx] = 2;
+    $('#cell_'+idx).addClass( 'cell_2' );
+  }
+}
+</script>
+<style>
+html, body {
+  width: 100%;
+  height: 100%;
+  padding: 0px;
+  margin: 0px;
+}
+
+.tbl{
+  border: 1px solid #888;
+  border-collapse: collapse;
+  empty-cells: show;
+  margin: auto;
+}
+td.cell{
+  border: 1px solid #888;
+  padding: 0;
+  font-size: 5pt;
+  width: 10px;
+  height: 10px;
+}
+.cell_1{
+  background-color: #0f0;
+}
+.cell_2{
+  background-color: #f00;
+}
+.cell_3{
+  background-color: #808;
+}
+</style>
+</head>
+<body>
+  <div class="container" style="position: relative; top: 20px;">
+    <select class="form-control" id="sample">
+      <option value="0">密集</option>
+      <option value="1">空間</option>
+      <option value="2">余裕</option>
+    </select>
+  </div>
+
+  <div class="container" style="position: relative; top: 40px;">
+    <table class="tbl">
+      <tbody id="tbl_field">
+      </tbody>
+    </table>
+  </div>
+
+  <div class="container" style="position: relative; top: 80px;">
+    <table class="table">
+      <tr>
+        <td><button id="simulate_btn" class="btn btn-success" onClick="simulate();">シミュレート</button></td>
+        <td id="days">0</td>
+      </tr>
+      <tr>
+        <td>隣マスの人への伝染確率</td>
+        <td><input type="text" id="ratio1" value="0.2"/></td>
+      </tr>
+      <tr>
+        <td>２つ隣マスの人への伝染確率</td>
+        <td><input type="text" id="ratio2" value="0.04"/></td>
+      </tr>
+      <tr>
+        <td>３つ隣マスの人への伝染確率</td>
+        <td><input type="text" id="ratio3" value="0.008"/></td>
+      </tr>
+      <tr>
+        <td>伝染後の重症化率</td>
+        <td><input type="text" id="ratio4" value="0.2"/></td>
+      </tr>
+      <tr>
+        <td>インターバル(ms)</td>
+        <td><input type="text" id="ratio5" value="2000"/></td>
+      </tr>
+      <tr>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>

@@ -1,0 +1,286 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3c.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml">
+<head>
+<meta charset="utf8"/>
+<meta http-equiv="pragma" content="no-cache"/>
+<script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+<link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet"/>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+<meta name="apple-mobile-web-app-title" content="Corona Lifegame"/>
+
+<title>Corona Lifegame</title>
+<script>
+var MARGIN = 3;
+var ROWS = 40 + MARGIN * 2;
+var COLS = 40 + MARGIN * 2;
+
+var Cell = function( field, cell, r, c ){
+  var out = ( r < MARGIN || field.rows() - MARGIN <= r || c < MARGIN || field.cols() - MARGIN <= c );
+  this.out_of_field = function(){ return out; };
+
+  var live = false;
+  this.birth = function(){
+    live = true;
+    this.view();
+  };
+  this.death = function(){
+    live = false;
+    this.view();
+  };
+  this.live = function(){
+    return live;
+  };
+  this.view = function(){
+    if( cell ){
+      cell.style.backgroundColor = live ? 'black' : 'white';
+    }
+  };
+  var circ = [];
+  this.push_circ = function( c ){
+    circ.push( c );
+  };
+  this.next_gen = function(){
+    var len = circ.length;
+    var live_count = 0;
+    for( var i = 0; i < len; i ++ ){
+      if( circ[i].live() ){
+        live_count ++;
+      }
+    }
+    if( this.live() ){
+      return ( live_count === 2 || live_count === 3 ) ? CONTI : DEATH;
+    }else{
+      return ( live_count === 3 ) ? BIRTH : CONTI;
+    }
+  };
+}
+
+var Field = function( tblfield, rows, cols ){
+  this.timer_id = -1;
+  this.generation = 0;
+
+  var lockflag = false;
+  this.lock = function(){ lockflag = true; };
+  this.unlock = function(){ lockflag = false; };
+  this.locked = function(){ return lockflag; };
+
+  this.rows = function(){ return rows; };
+  this.cols = function(){ return cols; };
+
+  this.cells = [];
+  console.log( tblfield );
+  for( var r = 0; r < rows; r ++ ){
+    var line = null;
+    if( MARGIN <= r && r < rows - MARGIN ){
+      line = document.createElement( 'tr' );
+      tblfield.appendChild( line );
+    }
+    for( var c = 0; c < cols; c ++ ){
+      var cell = null;
+      if( line && MARGIN <= c && c < cols - MARGIN ){
+        cell = document.createElement( 'td' );
+        line.appendChild( cell ).appendChild( document.createTextNode( ' ' ) );
+        cell.className = 'cell';
+      }
+      //this.cells.push( new Cell( this, cell, r, c ) );
+    }
+  }
+  for( var r = 0; r < rows; r ++ ){
+    for( var c = 0; c < cols; c ++ ){
+      var i = r * cols + c;
+      if( r !== 0 && c !== 0 ){               this.cells[i].push_circ( this.cells[i-cols-1]); }  //. 左上
+      if( r !== 0 ){                          this.cells[i].push_circ( this.cells[i-cols]); }    //. 上
+      if( r !== 0 && c !== cols - 1 ){        this.cells[i].push_circ( this.cells[i-cols+1]); }  //. 右上
+      if( c !== 0 ){                          this.cells[i].push_circ( this.cells[i-1]); }       //. 左
+      if( c !== cols - 1 ){                   this.cells[i].push_circ( this.cells[i+1]); }       //. 右
+      if( r !== rows - 1 && c !== 0 ){        this.cells[i].push_circ( this.cells[i+cols-1]); }  //. 左下
+      if( r !== rows - 1 ){                   this.cells[i].push_circ( this.cells[i+cols]); }    //. 下
+      if( r !== rows - 1 && c !== cols - 1 ){ this.cells[i].push_circ( this.cells[i+cols+1]); }  //. 右下
+    }
+  }
+};
+Field.prototype.each_cell = function( callback ){
+  var len = this.cells.length;
+  for( var i = 0; i < len; i ++ ){
+    callback( this.cells[i], i );
+  }
+};
+Field.prototype.next = function(){
+  var next_gen = [];
+  var extinct = true;
+  this.each_cell( function( cell ){
+    var ng = cell.next_gen();
+    if( !cell.out_of_field() && ( ng === BIRTH || ng === CONTI && cell.live() ) ){ extinct = false; }
+    next_gen.push( ng );
+  });
+  this.each_cell( function( cell, i ){
+    if( next_gen[i] === BIRTH ){
+      cell.birth();
+    }else if( next_gen[i] === DEATH ){
+      cell.death();
+    }
+  });
+  this.generation ++;
+  showGeneration( this.generation );
+  if( extinct ){
+    this.stop();
+  }
+};
+Field.prototype.reset = function(){
+  this.stop();
+  this.each_cell( function( cell ){
+    cell.death();
+    cell.view();
+  });
+  this.generation = 0;
+  showGeneration( 0 );
+};
+Field.prototype.start = function(){
+  if( !this.locked() ){
+    this.lock();
+    this.generation = 0;
+    showGeneration( 0 );
+    var that = this;
+    this.timer_id = setInterval( function(){
+      that.next();
+    }, interval );
+  }
+};
+Field.prototype.stop = function(){
+  if( this.timer_id >= 0 ){
+    clearInterval( this.timer_id );
+    this.timer_id = -1;
+  };
+  this.unlock();
+};
+Field.prototype.preset = function( preset_id ){
+  this.reset();
+  var data = Field.preset_data[preset_id].data;
+  var len = data.length;
+  var width = data[0].length;
+  var r_offset = Math.floor( ( this.rows() - len ) / 2 );
+  var c_offset = Math.floor( ( this.cols() - width ) / 2 );
+  for( var i = 0; i < len; i ++ ){
+    for( var j = 0; j < width; j ++ ){
+      var r = r_offset + i;
+      var c = c_offset + j;
+      if( data[i].substr( j, 1 ) === '#' ){ this.cells[r * this.cols() + c].birth(); }
+    }
+  }
+};
+Field.preset_data = {
+  '0': {
+    name: 'データ１',
+    data: [
+      '#######',
+      '# ### #',
+      '#######'
+    ]
+  },
+  '1': {
+    name: 'データ２',
+    data: [
+      '###_###',
+      '#_____#',
+      '_#___#_',
+      '_______',
+      '_#___#_',
+      '#_____#',
+      '###_###',
+      '# ### #'
+    ]
+  }
+};
+
+var g_field = null;
+var startGame = function(){
+  g_field.start( Number( $('sel_interval').value ) );
+};
+var presetField = function(){
+  g.field.preset( $('sel_preset').value );
+};
+var stopGame = function(){
+  g_field.stop();
+};
+var resetField = function(){
+  g_field.reset();
+};
+var showGeneration = function( gen ){
+  $('generation').innerHTML = gen;
+};
+var initPresetSelect = function(){
+  var sel = $('sel_preset');
+  var name_max = 0;
+  for( var id in Field.preset_data ){
+    var name = Field.preset_data[id].name;
+    if( name_max < name.length ){
+      name_max = name.length;
+    }
+    var opt = document.createElement( 'option' );
+    opt.value = id;
+    var txt = document.createTextNode( name );
+    sel.appendChild( opt ).appendChild( txt );
+  }
+  sel.style.width = name_max + 'em';
+};
+
+
+$(function(){
+  g_field = new Field( $('tbl_field'), ROWS, COLS );
+  initPresetSelect();
+});
+</script>
+<style>
+html, body {
+  width: 100%;
+  height: 100%;
+  padding: 0px;
+  margin: 0px;
+}
+
+.tbl{
+  border: 1px solid #888;
+  border-collapse: collapse;
+  empty-cells: show;
+  margin: auto;
+}
+td.cell{
+  border: 1px solid #888;
+  padding: 0;
+  font-size: 5pt;
+  width: 10px;
+  height: 10px;
+}
+.div_generation{
+  background-color: #eee;
+  padding: 0.2em;
+  font-size: 16pt;
+  width: 300px;
+  height: 1.4em;
+  text-align: center;
+  margin: 10px auto;
+}
+.desc{
+  margin: 10px auto;
+  border: 2px sold #c99;
+  padding: 1em;
+  width: 400px;
+  font-size: 9pt;
+  line-height: 1.2em;
+  text-align: left;
+}
+</style>
+</head>
+<body>
+  <div>
+    <table class="tbl">
+      <tbody id="tbl_field">
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
